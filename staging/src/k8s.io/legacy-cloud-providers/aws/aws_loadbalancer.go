@@ -84,12 +84,11 @@ type nlbPortMapping struct {
 	SSLPolicy         string
 }
 
-// getLoadBalancerAdditionalTags converts the comma separated list of key-value
-// pairs in the ServiceAnnotationLoadBalancerAdditionalTags annotation and returns
-// it as a map.
-func getLoadBalancerAdditionalTags(annotations map[string]string) map[string]string {
+// getKeyValuePropertiesFromAnnotation converts the comma separated list of key-value
+// pairs from the specified annotation and returns it as a map.
+func getKeyValuePropertiesFromAnnotation(annotations map[string]string, annotation string) map[string]string {
 	additionalTags := make(map[string]string)
-	if additionalTagsList, ok := annotations[ServiceAnnotationLoadBalancerAdditionalTags]; ok {
+	if additionalTagsList, ok := annotations[annotation]; ok {
 		additionalTagsList = strings.TrimSpace(additionalTagsList)
 
 		// Break up list of "Key1=Val,Key2=Val2"
@@ -123,7 +122,7 @@ func (c *Cloud) ensureLoadBalancerv2(namespacedName types.NamespacedName, loadBa
 	dirty := false
 
 	// Get additional tags set by the user
-	tags := getLoadBalancerAdditionalTags(annotations)
+	tags := getKeyValuePropertiesFromAnnotation(annotations, ServiceAnnotationLoadBalancerAdditionalTags)
 	// Add default tags
 	tags[TagNameKubernetesService] = namespacedName.String()
 	tags = c.tagging.buildTags(ResourceLifecycleOwned, tags)
@@ -939,7 +938,7 @@ func (c *Cloud) ensureLoadBalancer(namespacedName types.NamespacedName, loadBala
 		}
 
 		// Get additional tags set by the user
-		tags := getLoadBalancerAdditionalTags(annotations)
+		tags := getKeyValuePropertiesFromAnnotation(annotations, ServiceAnnotationLoadBalancerAdditionalTags)
 
 		// Add default tags
 		tags[TagNameKubernetesService] = namespacedName.String()
@@ -1128,7 +1127,7 @@ func (c *Cloud) ensureLoadBalancer(namespacedName types.NamespacedName, loadBala
 		{
 			// Add additional tags
 			klog.V(2).Infof("Creating additional load balancer tags for %s", loadBalancerName)
-			tags := getLoadBalancerAdditionalTags(annotations)
+			tags := getKeyValuePropertiesFromAnnotation(annotations, ServiceAnnotationLoadBalancerAdditionalTags)
 			if len(tags) > 0 {
 				err := c.addLoadBalancerTags(loadBalancerName, tags)
 				if err != nil {
@@ -1521,9 +1520,10 @@ func proxyProtocolEnabled(backend *elb.BackendServerDescription) bool {
 // findInstancesForELB gets the EC2 instances corresponding to the Nodes, for setting up an ELB
 // We ignore Nodes (with a log message) where the instanceid cannot be determined from the provider,
 // and we ignore instances which are not found
-func (c *Cloud) findInstancesForELB(nodes []*v1.Node) (map[InstanceID]*ec2.Instance, error) {
+func (c *Cloud) findInstancesForELB(nodes []*v1.Node, targetNodeLabels map[string]string) (map[InstanceID]*ec2.Instance, error) {
+
 	// Map to instance ids ignoring Nodes where we cannot find the id (but logging)
-	instanceIDs := mapToAWSInstanceIDsTolerant(nodes)
+	instanceIDs := mapToAWSInstanceIDsTolerant(nodes, targetNodeLabels)
 
 	cacheCriteria := cacheCriteria{
 		// MaxAge not required, because we only care about security groups, which should not change
