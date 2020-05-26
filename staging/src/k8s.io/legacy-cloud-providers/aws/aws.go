@@ -3692,8 +3692,7 @@ func (c *Cloud) EnsureLoadBalancer(ctx context.Context, clusterName string, apiS
 		return nil, fmt.Errorf("LoadBalancerIP cannot be specified for AWS ELB")
 	}
 
-	targetNodeLabels := getKeyValuePropertiesFromAnnotation(annotations, ServiceAnnotationLoadBalancerTargetNodeLabels)
-	instances, err := c.findInstancesForELB(nodes, targetNodeLabels)
+	instances, err := c.findInstancesForELB(nodes, annotations)
 	if err != nil {
 		return nil, err
 	}
@@ -4477,8 +4476,7 @@ func (c *Cloud) EnsureLoadBalancerDeleted(ctx context.Context, clusterName strin
 
 // UpdateLoadBalancer implements LoadBalancer.UpdateLoadBalancer
 func (c *Cloud) UpdateLoadBalancer(ctx context.Context, clusterName string, service *v1.Service, nodes []*v1.Node) error {
-	targetNodeLabels := getKeyValuePropertiesFromAnnotation(service.Annotations, ServiceAnnotationLoadBalancerTargetNodeLabels)
-	instances, err := c.findInstancesForELB(nodes, targetNodeLabels)
+	instances, err := c.findInstancesForELB(nodes, service.Annotations)
 	if err != nil {
 		return err
 	}

@@ -31,12 +31,9 @@ import (
 
 func TestMapToAWSInstanceIDs(t *testing.T) {
 	tests := []struct {
-		Kubernetes       KubernetesInstanceID
-		Aws              InstanceID
-		NodeLabels       map[string]string
-		TargetNodeLabels map[string]string
-		ExpectError      bool
-		ExpectExcluded   bool
+		Kubernetes  KubernetesInstanceID
+		Aws         InstanceID
+		ExpectError bool
 	}{
 		{
 			Kubernetes: "aws:///us-east-1a/i-12345678",
@@ -82,43 +79,6 @@ func TestMapToAWSInstanceIDs(t *testing.T) {
 			Kubernetes:  "",
 			ExpectError: true,
 		},
-		{
-			Kubernetes: "aws:///us-east-1a/i-12345678",
-			Aws:        "i-12345678",
-			NodeLabels: map[string]string{"k1": "v1"},
-		},
-		{
-			Kubernetes:       "aws:///us-east-1a/i-12345678",
-			Aws:              "i-12345678",
-			NodeLabels:       map[string]string{"k1": "v1"},
-			TargetNodeLabels: map[string]string{"k1": "v1"},
-		},
-		{
-			Kubernetes:       "aws:///us-east-1a/i-12345678",
-			Aws:              "i-12345678",
-			NodeLabels:       map[string]string{"k1": "v1", "k2": "v2"},
-			TargetNodeLabels: map[string]string{"k2": ""},
-		},
-		{
-			Kubernetes:       "aws:///us-east-1a/i-12345678",
-			Aws:              "i-12345678",
-			NodeLabels:       map[string]string{"k1": "v1", "k2": "v2"},
-			TargetNodeLabels: map[string]string{"k3": "v3"},
-			ExpectExcluded:   true,
-		},
-		{
-			Kubernetes:       "aws:///us-east-1a/i-12345678",
-			Aws:              "i-12345678",
-			NodeLabels:       map[string]string{"k1": "v1", "k2": "v2"},
-			TargetNodeLabels: map[string]string{"k3": ""},
-			ExpectExcluded:   true,
-		},
-		{
-			Kubernetes:       "aws:///us-east-1a/i-12345678",
-			Aws:              "i-12345678",
-			TargetNodeLabels: map[string]string{"k1": ""},
-			ExpectExcluded:   true,
-		},
 	}
 
 	for _, test := range tests {
@@ -139,21 +99,15 @@ func TestMapToAWSInstanceIDs(t *testing.T) {
 	for _, test := range tests {
 		node := &v1.Node{}
 		node.Spec.ProviderID = string(test.Kubernetes)
-		node.Labels = test.NodeLabels
 
-		awsInstanceIds, err := mapToAWSInstanceIDs([]*v1.Node{node}, test.TargetNodeLabels)
-
-		if test.ExpectError && err != nil {
+		awsInstanceIds, err := mapToAWSInstanceIDs([]*v1.Node{node})
+		if err != nil {
 			if !test.ExpectError {
 				t.Errorf("unexpected error parsing %s: %v", test.Kubernetes, err)
 			}
 		} else {
 			if test.ExpectError {
 				t.Errorf("expected error parsing %s", test.Kubernetes)
-			} else if test.ExpectExcluded {
-				if len(awsInstanceIds) > 0 {
-					t.Errorf("unexpected value, nodes with labels %v should be excluded with filter %v", test.NodeLabels, test.TargetNodeLabels)
-				}
 			} else if len(awsInstanceIds) != 1 {
 				t.Errorf("unexpected value parsing %s, got %s", test.Kubernetes, awsInstanceIds)
 			} else if awsInstanceIds[0] != test.Aws {
@@ -161,19 +115,17 @@ func TestMapToAWSInstanceIDs(t *testing.T) {
 			}
 		}
 
-		awsInstanceIds = mapToAWSInstanceIDsTolerant([]*v1.Node{node}, test.TargetNodeLabels)
+		awsInstanceIds = mapToAWSInstanceIDsTolerant([]*v1.Node{node})
 		if test.ExpectError {
 			if len(awsInstanceIds) != 0 {
 				t.Errorf("unexpected results parsing %s: %s", test.Kubernetes, awsInstanceIds)
 			}
-		} else if test.ExpectExcluded {
-			if len(awsInstanceIds) > 0 {
-				t.Errorf("unexpected value, nodes with labels %v should be excluded with filter %v", test.NodeLabels, test.TargetNodeLabels)
+		} else {
+			if len(awsInstanceIds) != 1 {
+				t.Errorf("unexpected value parsing %s, got %s", test.Kubernetes, awsInstanceIds)
+			} else if awsInstanceIds[0] != test.Aws {
+				t.Errorf("unexpected value parsing %s, got %s", test.Kubernetes, awsInstanceIds)
 			}
-		} else if len(awsInstanceIds) != 1 {
-			t.Errorf("unexpected value parsing %s, got %s", test.Kubernetes, awsInstanceIds)
-		} else if awsInstanceIds[0] != test.Aws {
-			t.Errorf("unexpected value parsing %s, got %s", test.Kubernetes, awsInstanceIds)
 		}
 	}
 }

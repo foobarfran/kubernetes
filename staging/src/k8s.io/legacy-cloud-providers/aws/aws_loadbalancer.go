@@ -1520,10 +1520,12 @@ func proxyProtocolEnabled(backend *elb.BackendServerDescription) bool {
 // findInstancesForELB gets the EC2 instances corresponding to the Nodes, for setting up an ELB
 // We ignore Nodes (with a log message) where the instanceid cannot be determined from the provider,
 // and we ignore instances which are not found
-func (c *Cloud) findInstancesForELB(nodes []*v1.Node, targetNodeLabels map[string]string) (map[InstanceID]*ec2.Instance, error) {
+func (c *Cloud) findInstancesForELB(nodes []*v1.Node, annotations map[string]string) (map[InstanceID]*ec2.Instance, error) {
+
+	targetNodes := filterTargetNodes(nodes, annotations)
 
 	// Map to instance ids ignoring Nodes where we cannot find the id (but logging)
-	instanceIDs := mapToAWSInstanceIDsTolerant(nodes, targetNodeLabels)
+	instanceIDs := mapToAWSInstanceIDsTolerant(targetNodes)
 
 	cacheCriteria := cacheCriteria{
 		// MaxAge not required, because we only care about security groups, which should not change
@@ -1538,4 +1540,29 @@ func (c *Cloud) findInstancesForELB(nodes []*v1.Node, targetNodeLabels map[strin
 	// We ignore instances that cannot be found
 
 	return instances, nil
+}
+
+// filterTargetedNodes uses node labels to filter the nodes that should be used for the ELB,
+// checking if at least one of the target node labels provided in an annotation, is present in the node
+func filterTargetNodes(nodes []*v1.Node, annotations map[string]string) []*v1.Node {
+
+	targetNodeLabels := getKeyValuePropertiesFromAnnotation(annotations, ServiceAnnotationLoadBalancerTargetNodeLabels)
+
+	if len(targetNodeLabels) == 0 {
+		return nodes
+	}
+
+	targetNodes := make([]*v1.Node, 0)
+
+	for _, node := range nodes {
+		if node.Labels != nil && len(node.Labels) > 0 {
+			for targetNodeKey, targetNodeValue := range targetNodeLabels {
+				if nodeValue, ok := node.Labels[targetNodeKey]; ok && (targetNodeValue == "" || targetNodeValue == nodeValue) {
+					targetNodes = append(targetNodes, node)
+				}
+			}
+		}
+	}
+
+	return targetNodes
 }

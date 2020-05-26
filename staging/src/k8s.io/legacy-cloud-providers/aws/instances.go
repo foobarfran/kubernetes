@@ -91,16 +91,11 @@ func (name KubernetesInstanceID) MapToAWSInstanceID() (InstanceID, error) {
 }
 
 // mapToAWSInstanceID extracts the InstanceIDs from the Nodes, returning an error if a Node cannot be mapped
-// and skipping Nodes that do not match with the specified target node labels
-func mapToAWSInstanceIDs(nodes []*v1.Node, targetNodeLabels map[string]string) ([]InstanceID, error) {
+func mapToAWSInstanceIDs(nodes []*v1.Node) ([]InstanceID, error) {
 	var instanceIDs []InstanceID
 	for _, node := range nodes {
 		if node.Spec.ProviderID == "" {
 			return nil, fmt.Errorf("node %q did not have ProviderID set", node.Name)
-		}
-		if !shouldNodeBeIncluded(node, targetNodeLabels) {
-			klog.Infof("node %q did not have labels matching %v", node.Name, targetNodeLabels)
-			continue
 		}
 		instanceID, err := KubernetesInstanceID(node.Spec.ProviderID).MapToAWSInstanceID()
 		if err != nil {
@@ -112,18 +107,12 @@ func mapToAWSInstanceIDs(nodes []*v1.Node, targetNodeLabels map[string]string) (
 	return instanceIDs, nil
 }
 
-// mapToAWSInstanceIDsTolerant extracts the InstanceIDs from the Nodes, skipping Nodes that either cannot be mapped
-// or do not match with the specified target node labels
-func mapToAWSInstanceIDsTolerant(nodes []*v1.Node, targetNodeLabels map[string]string) []InstanceID {
+// mapToAWSInstanceIDsTolerant extracts the InstanceIDs from the Nodes, skipping Nodes that cannot be mapped
+func mapToAWSInstanceIDsTolerant(nodes []*v1.Node) []InstanceID {
 	var instanceIDs []InstanceID
 	for _, node := range nodes {
-
 		if node.Spec.ProviderID == "" {
 			klog.Warningf("node %q did not have ProviderID set", node.Name)
-			continue
-		}
-		if !shouldNodeBeIncluded(node, targetNodeLabels) {
-			klog.Infof("node %q did not have labels matching %v", node.Name, targetNodeLabels)
 			continue
 		}
 		instanceID, err := KubernetesInstanceID(node.Spec.ProviderID).MapToAWSInstanceID()
@@ -135,27 +124,6 @@ func mapToAWSInstanceIDsTolerant(nodes []*v1.Node, targetNodeLabels map[string]s
 	}
 
 	return instanceIDs
-}
-
-// shouldNodeBeIncluded checks if the node should be included,
-// checking if at least one of the targetNodeLabels is present in the node
-func shouldNodeBeIncluded(node *v1.Node, targetNodeLabels map[string]string) bool {
-
-	if targetNodeLabels == nil || len(targetNodeLabels) == 0 {
-		return true
-	}
-	if node.Labels == nil || len(node.Labels) == 0 {
-		return false
-	}
-	for targetNodeKey, targetNodeValue := range targetNodeLabels {
-		if nodeValue, ok := node.Labels[targetNodeKey]; ok {
-			if targetNodeValue == "" || targetNodeValue == nodeValue {
-				return true
-			}
-		}
-	}
-
-	return false
 }
 
 // Gets the full information about this instance from the EC2 API
